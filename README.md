@@ -62,3 +62,19 @@ Rules catch obvious errors; realistic fraud needs a model. (Planned next.)
 3. Serve the model with an API
 
 *Built with help from AI tools (Claude); all outputs were run and checked by me.*
+## Step 2: Predicting 30-day user value (done)
+
+`train_ltv.py` predicts each user's 30-day value from their first 3 days
+(gradient boosting, trained on earlier signups, tested on later signups).
+
+| Method | Avg error per user | Top 10% predicted users hold... |
+|---|---|---|
+| Random pick | – | 7.6% of all value |
+| 3-day value × multiplier | $22.76 | 47.8% |
+| **My model** | **$16.63** | **56.6%** |
+| Perfect knowledge | $0 | 71.0% |
+
+- 63% of users earn $0 in 30 days, so the target is very skewed; I trained on log(1 + value).
+- **Clicks in the first 3 days are the strongest signal**, stronger than early rewards,
+  because completions (and rewards) arrive with a delay of up to several days.
+- Predictions correlate 0.61 with the users' hidden true engagement level.
