@@ -99,4 +99,4 @@ AUC 0.725 vs 0.653 for the baseline (each offer's average completion rate).
   the effect is +$20.60 per user and the confidence interval is 21% narrower.
 - **What caused it:** click rate +49% and completions per click +13%, while revenue per
   completion fell 14%. The model shows cheaper offers that users actually complete.
-- **Guardrail:** user rewards +$11 and Almedia's margin +$10 per user, so both sides win.s
+- **Guardrail:** user rewards +$11 and Almedia's margin +$10 per user, so both sides win.
