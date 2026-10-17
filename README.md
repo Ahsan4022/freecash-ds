@@ -21,7 +21,7 @@ vs. payout), so models can later be checked against the known "true" values.
 Tables built: `stg_events`, `rejected_events`, `user_daily`, `offer_stats`,
 `user_first3days` (input for the 30-day user value model).
 
-## What I found
+### What I found
 
 - **Only 34% of users ever complete an offer.** Two out of three users
   generate no advertiser revenue.
@@ -31,7 +31,7 @@ Tables built: `stg_events`, `rejected_events`, `user_daily`, `offer_stats`,
 - **Early behaviour is not everything:** one user earned $0 in the first 3 days
   but almost $800 within 30 days.
 
-## Breaking and fixing the pipeline
+### Breaking and fixing the pipeline
 
 I injected 6 kinds of bad data: duplicate events, re-sent events with the same ID,
 negative rewards, completions without a click, unknown users, and wrong dates.
@@ -45,23 +45,8 @@ negative rewards, completions without a click, unknown users, and wrong dates.
 **What the checks missed:** after the fix, all checks passed, but comparing with a
 known-clean run showed some users' 30-day values were still too high. 29 of 50
 fake completions looked like normal behaviour and passed every rule.
-Rules catch obvious errors; realistic fraud needs a model. (Planned next.)
+Rules catch obvious errors; realistic fraud needs a model.
 
-## How to run
-
-    pip install pandas numpy duckdb
-    python generate_data.py --users 5000
-    python load.py
-    python transform.py
-    python checks.py
-
-## Next steps
-
-1. Predict 30-day user value from the first 3 days
-2. Offer ranking model + A/B test with proper analysis
-3. Serve the model with an API
-
-*Built with help from AI tools (Claude); all outputs were run and checked by me.*
 ## Step 2: Predicting 30-day user value (done)
 
 `train_ltv.py` predicts each user's 30-day value from their first 3 days
@@ -78,25 +63,70 @@ Rules catch obvious errors; realistic fraud needs a model. (Planned next.)
 - **Clicks in the first 3 days are the strongest signal**, stronger than early rewards,
   because completions (and rewards) arrive with a delay of up to several days.
 - Predictions correlate 0.61 with the users' hidden true engagement level.
-## Step 3: Offer ranking model + A/B test (done)
+
+## Step 3: Offer ranking model + A/B tests (done)
 
 **Ranking model** (`train_ranker.py`): predicts P(complete) for every user–offer pair
 and ranks offers by expected revenue = P(complete) × advertiser payout.
-AUC 0.725 vs 0.653 for the baseline (each offer's average completion rate).
+Evaluated on a time-based split, then retrained on all data for use.
 
 - **Position bias:** the same offers are ~5× more likely to be completed at position 1
-  (3.4%) than at position 10 (0.65%). The model uses list position as a feature and
-  scores every offer "as if shown at position 1".
+  than at position 10. The model uses list position as a feature and scores every
+  offer "as if shown at position 1".
 - **Feedback loop:** the old payout-first ranking only ever showed 36 of 300 offers,
-  all games. No data exists on apps or surveys, so no model trained on this data
-  can learn to recommend them.
+  all games. No data existed on apps or surveys, so a model trained on it couldn't
+  learn about them.
 
-**A/B test** (`ab_test.py` simulates 14 days, `ab_analysis.py` analyses it):
-5,000 users, 50/50 split, old ranking (A) vs. model (B).
+**Fixing the feedback loop with exploration** (`explore.py`): 14 more days where 20%
+of sessions show random offers. This earned less than half the revenue per impression
+during those sessions, but collected data on all 300 offers.
 
-- Sanity checks passed: balanced split, no pre-test difference between groups.
-- **Revenue per user: about +50%** (p < 0.001). With CUPED (pre-test revenue as covariate),
-  the effect is +$20.60 per user and the confidence interval is 21% narrower.
-- **What caused it:** click rate +49% and completions per click +13%, while revenue per
-  completion fell 14%. The model shows cheaper offers that users actually complete.
-- **Guardrail:** user rewards +$11 and Almedia's margin +$10 per user, so both sides win.
+**A/B tests** (`ab_test.py` simulates 14 days, `ab_analysis.py` analyses):
+5,000 users, 50/50 split. Sanity checks passed (balanced split, no pre-test difference).
+
+| Ranking | Revenue per user | vs old ranking |
+|---|---|---|
+| Old: highest payout first | $43.30 | – |
+| Model v1 (old data only) | $59.38 | +37% |
+| **Model v2 (+ exploration data)** | **$93.49** | **+116%** |
+
+For model v2:
+- **What caused it:** click rate +122% and completions per click +141%, while revenue per
+  completion fell 61%. The model shows cheaper offers that users actually want and finish.
+- **CUPED** (pre-test revenue as covariate) gives +$49.12 per user with a 21% narrower
+  confidence interval, so the same test would need fewer users.
+- **Guardrail:** users earn +$31 more rewards and Almedia's margin grows +$19 per user.
+
+**A mistake I found and fixed:** my first exploration model performed *worse* than v1.
+The time-based split had put all exploration days into the test set, so the model never
+trained on them. Fix: use the split only for evaluation, then retrain the final model
+on all data.
+
+## How to run
+
+    pip install pandas numpy duckdb scikit-learn
+
+    # Step 1: data pipeline
+    python generate_data.py --users 5000
+    python load.py
+    python transform.py
+    python checks.py
+
+    # Step 2: user value model
+    python train_ltv.py
+
+    # Step 3: ranking model, exploration and A/B tests
+    python train_ranker.py
+    python ab_test.py
+    python ab_analysis.py
+    python explore.py
+    python train_ranker.py --explore
+    python ab_test.py ranker_v2.joblib
+    python ab_analysis.py ab_results_v2.csv
+
+## Next steps
+
+1. Serve the ranking model with an API
+2. Add per-user history features (e.g. each user's past click rate per offer type)
+
+*Built with help from AI tools (Claude); all outputs were run and checked by me.*

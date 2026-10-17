@@ -8,11 +8,16 @@ Every user is randomly assigned to A or B (50/50). We then simulate how they
 behave, using the same hidden "real world" rules as generate_data.py.
 Output: ab_results.csv with one row per user.
 """
+import sys
+
 import duckdb
 import joblib
 import numpy as np
 import pandas as pd
 
+# Which model to test, e.g.:  py ab_test.py ranker_v2.joblib
+MODEL_FILE = sys.argv[1] if len(sys.argv) > 1 else "ranker.joblib"
+OUT_FILE = MODEL_FILE.replace("ranker", "ab_results").replace(".joblib", ".csv")
 DAYS = 14
 LIST_SIZE = 10
 rng = np.random.default_rng(2026)
@@ -34,12 +39,13 @@ offers = offers.merge(pd.read_csv("data/_truth_offers.csv"), on="offer_id")
 users["group"] = np.where(rng.random(len(users)) < 0.5, "A_control", "B_model")
 
 # ---------- 3. Model scores for every (user, offer) pair ----------
-saved = joblib.load("ranker.joblib")
+saved = joblib.load(MODEL_FILE)
 model, features = saved["model"], saved["features"]
 pairs = users[["user_id", "country", "platform", "acquisition_channel", "age_group"]].merge(
     offers[["offer_id", "offer_type", "category", "difficulty", "user_reward_usd",
             "advertiser_payout_usd", "est_minutes"]], how="cross")
 pairs["list_position"] = 1                      # judge every offer as if shown at the top
+pairs["offer_rate"] = pairs["offer_id"].map(saved["offer_rate"]).fillna(saved["prior"])
 for c, dt in saved["dtypes"].items():
     # Values the model never saw in training (e.g. offer types that were never shown)
     # become "missing" - the model has no information about them.
@@ -85,6 +91,6 @@ for i, u in enumerate(users.to_dict("records")):
     rows.append(s)
 
 results = pd.DataFrame(rows).merge(users[["user_id", "age_group"]], on="user_id")
-results.to_csv("ab_results.csv", index=False)
+results.to_csv(OUT_FILE, index=False)
 print(results.groupby("group")[["sessions", "clicks", "completions", "revenue_usd"]].sum().round(0))
-print("\nSaved ab_results.csv. Now run:  py ab_analysis.py")
+print(f"\nTested {MODEL_FILE}. Saved {OUT_FILE}. Now run:  py ab_analysis.py {OUT_FILE}")

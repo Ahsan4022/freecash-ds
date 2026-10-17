@@ -9,11 +9,12 @@ Step 3b: Analyse the A/B test properly.
   6. Segments: who benefits most?
 """
 import duckdb
+import sys
 import numpy as np
 import pandas as pd
 from scipy import stats
 
-ab = pd.read_csv("ab_results.csv")
+ab = pd.read_csv(sys.argv[1] if len(sys.argv) > 1 else "ab_results.csv")
 A, B = "A_control", "B_model"
 
 # Pre-test revenue per user (from the 60 days of logged data) - used for checks and CUPED
