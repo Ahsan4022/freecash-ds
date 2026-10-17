@@ -78,3 +78,25 @@ Rules catch obvious errors; realistic fraud needs a model. (Planned next.)
 - **Clicks in the first 3 days are the strongest signal**, stronger than early rewards,
   because completions (and rewards) arrive with a delay of up to several days.
 - Predictions correlate 0.61 with the users' hidden true engagement level.
+## Step 3: Offer ranking model + A/B test (done)
+
+**Ranking model** (`train_ranker.py`): predicts P(complete) for every user–offer pair
+and ranks offers by expected revenue = P(complete) × advertiser payout.
+AUC 0.725 vs 0.653 for the baseline (each offer's average completion rate).
+
+- **Position bias:** the same offers are ~5× more likely to be completed at position 1
+  (3.4%) than at position 10 (0.65%). The model uses list position as a feature and
+  scores every offer "as if shown at position 1".
+- **Feedback loop:** the old payout-first ranking only ever showed 36 of 300 offers,
+  all games. No data exists on apps or surveys, so no model trained on this data
+  can learn to recommend them.
+
+**A/B test** (`ab_test.py` simulates 14 days, `ab_analysis.py` analyses it):
+5,000 users, 50/50 split, old ranking (A) vs. model (B).
+
+- Sanity checks passed: balanced split, no pre-test difference between groups.
+- **Revenue per user: about +50%** (p < 0.001). With CUPED (pre-test revenue as covariate),
+  the effect is +$20.60 per user and the confidence interval is 21% narrower.
+- **What caused it:** click rate +49% and completions per click +13%, while revenue per
+  completion fell 14%. The model shows cheaper offers that users actually complete.
+- **Guardrail:** user rewards +$11 and Almedia's margin +$10 per user, so both sides win.s
