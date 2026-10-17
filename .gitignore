@@ -4,3 +4,4 @@ __pycache__/
 *.joblib
 ab_results*.csv
 explore_log.csv
+!api/model.joblib
